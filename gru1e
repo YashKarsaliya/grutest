@@ -1,0 +1,93 @@
+import numpy as np
+import pandas as pd
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import GRU, Dense
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+
+# Generate sample time series data
+def generate_time_series(start, end, n_points):
+    time = np.linspace(start, end, n_points)
+    series = np.sin(time) + np.random.randn(n_points) * 0.1  # adding noise
+    return time, series
+
+# Generate time series data
+start = 0
+end = 10
+n_points = 1000
+time, series = generate_time_series(start, end, n_points)
+
+# Visualize the time series
+plt.figure(figsize=(10, 6))
+plt.plot(time, series)
+plt.title("Generated Time Series Data")
+plt.xlabel("Time")
+plt.ylabel("Value")
+plt.show()
+
+# Prepare data for training
+window_size = 10
+X = []
+y = []
+for i in range(len(series) - window_size):
+    X.append(series[i:i+window_size])
+    y.append(series[i+window_size])
+
+X = np.array(X)
+y = np.array(y)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+# Scale the data
+scaler = MinMaxScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+y_train_scaled = scaler.fit_transform(y_train.reshape(-1, 1))
+y_test_scaled = scaler.transform(y_test.reshape(-1, 1))
+
+# Reshape the data for input to GRU
+X_train_scaled = X_train_scaled.reshape(-1, window_size, 1)
+X_test_scaled = X_test_scaled.reshape(-1, window_size, 1)
+
+# Build the GRU model
+model = Sequential([
+    GRU(50, activation='relu', input_shape=(window_size, 1)),
+    Dense(1)
+])
+
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train the model
+history = model.fit(X_train_scaled, y_train_scaled, epochs=50, batch_size=32, validation_split=0.1)
+
+# Evaluate the model
+loss = model.evaluate(X_test_scaled, y_test_scaled)
+print("Test Loss:", loss)
+
+# Plot training history
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Training and Validation Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+# Make predictions
+predictions = model.predict(X_test_scaled)
+
+# Inverse scaling for predictions
+predictions = scaler.inverse_transform(predictions)
+
+# Visualize predictions
+plt.figure(figsize=(10, 6))
+plt.plot(time[window_size:len(X_train)+window_size], y_train, label='Training Data')
+plt.plot(time[len(X_train)+window_size:len(X_train)+len(X_test)+window_size], y_test, label='Test Data')
+plt.plot(time[len(X_train)+window_size:len(X_train)+len(X_test)+window_size], predictions, label='Predictions')
+plt.title("Predictions vs Actual Data")
+plt.xlabel("Time")
+plt.ylabel("Value")
+plt.legend()
+plt.show()
